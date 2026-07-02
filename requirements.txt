@@ -1,0 +1,8 @@
+streamlit
+geopandas
+pandas
+numpy
+pydeck
+matplotlib
+shapely
+pyarrow

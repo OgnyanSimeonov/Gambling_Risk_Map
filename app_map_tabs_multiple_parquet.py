@@ -7,6 +7,7 @@ import pandas as pd
 import pydeck as pdk
 import shapely
 import streamlit as st
+import matplotlib.pyplot as plt
 
 # Import the OAC code mappings from your side file
 from oac_mappings import oac_group_names, oac_subgroup_names
@@ -169,7 +170,7 @@ def build_gdf(
     range_val = vmax - vmin if (vmax - vmin) > 0 else 1.0
     normalized = ((vals - vmin) / range_val).clip(0, 1).fillna(0.5)
 
-    cmap = cm.get_cmap("RdYlGn_r")
+    cmap = plt.colormaps["RdYlGn_r"]
     rgba_array = cmap(normalized.to_numpy())
 
     percentile_needed = 1.0 - (top_percentage_tier / 10.0)

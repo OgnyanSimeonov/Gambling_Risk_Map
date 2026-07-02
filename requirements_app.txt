@@ -1,5 +1,0 @@
-streamlit
-geopandas
-pandas
-lonboard
-palettable
