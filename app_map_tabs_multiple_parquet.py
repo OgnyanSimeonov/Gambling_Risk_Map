@@ -36,7 +36,6 @@ def get_region_list():
         regions = [f.replace(".parquet", "").replace("_", " ") for f in files if f.endswith(".parquet")]
         return sorted(regions)
     else:
-        # Fallback list if the directory isn't read correctly
         return [
             "East Midlands",
             "East of England",
@@ -105,11 +104,17 @@ def build_gdf(
     level: str,
     analysis_type: str,
     top_percentage_tier: int,
+    fast_mode: bool,
 ) -> gpd.GeoDataFrame:
-    """Combines spatial chunks with attributes and applies visual ranking."""
-    # Read the tiny regional parquet file instead of the whole country
+    """Combines spatial chunks with attributes, simplifies geometry if requested, and applies visual ranking."""
     g = load_regional_spatial_data(region).copy()
     oac_tobacco, oac_alcohol = load_csv_data()
+
+    # --- OPTION A: Geometry Simplification ---
+    # Reduces geometry vertex complexity, drastically lowering memory footprints and JSON serialization overhead.
+    if fast_mode:
+        # tolerance=0.0008 strikes a strong balance between keeping shape structures and shedding 75%+ of data weight
+        g["geometry"] = g["geometry"].simplify(tolerance=0.0008, preserve_topology=True)
 
     shp_col = "GRP" if level == "group" else "SUBGRP"
 
@@ -149,12 +154,10 @@ def build_gdf(
 
     g["join_key"] = g[shp_col].str.upper()
 
-    # Splicing datasets
     g = g.merge(tobacco_processed, on="join_key", how="left")
     g = g.merge(alcohol_processed, on="join_key", how="left")
     g = g.drop(columns=["join_key"])
 
-    # Establish risk baseline mapping rule
     if analysis_type == "Tobacco":
         g["active_display_ratio"] = g["tobacco_OR"]
     elif analysis_type == "Alcohol":
@@ -162,7 +165,6 @@ def build_gdf(
     else:
         g["active_display_ratio"] = (g["tobacco_OR"] + g["alcohol_OR"]) / 2.0
 
-    # Color mapping calculations
     vals = g["active_display_ratio"].fillna(1.0)
     vmin = vals.min()
     vmax = vals.quantile(0.95)
@@ -193,7 +195,6 @@ def build_gdf(
     g["High Risk Alert"] = status_list
     g = g.rename(columns=RENAME_MAP)
 
-    # Force strict 2-decimal rounding as strings right before serialization
     cols_to_format = [
         "tobacco_OR",
         "tobacco_lower",
@@ -322,7 +323,6 @@ with tab1:
             placeholder="Choose a region...",
         )
 
-    # Session storage tracking to force aggressive garbage cleaning on switch
     if "current_region" not in st.session_state:
         st.session_state["current_region"] = None
 
@@ -351,15 +351,27 @@ with tab1:
             disabled=(region_choice is None),
         )
 
+    # Performance configurations placement
+    fast_render_enabled = True
     if region_choice is not None:
         st.write("")
-        risk_slider = st.slider(
-            "Show Only the Highest Risk Areas (Risk Focus Filter):",
-            min_value=1,
-            max_value=10,
-            value=10,
-            step=1,
-        )
+        slider_col, toggle_col = st.columns([2, 1])
+        
+        with slider_col:
+            risk_slider = st.slider(
+                "Show Only the Highest Risk Areas (Risk Focus Filter):",
+                min_value=1,
+                max_value=10,
+                value=10,
+                step=1,
+            )
+        with toggle_col:
+            st.write("")  # Spatial buffer alignment
+            fast_render_enabled = st.checkbox(
+                "Optimize Performance (Fast Render Mode)", 
+                value=True,
+                help="Simplifies polygon boundary paths slightly to load/render map significantly faster."
+            )
 
         if risk_slider == 10:
             st.markdown(
@@ -379,17 +391,27 @@ with tab1:
     else:
         level_key = oac_level_choice.lower()
 
-        gdf = build_gdf(
-            region_choice,
-            level_key,
-            analysis_choice,
-            risk_slider,
+        # --- Enhanced UI Loader with dynamic strategy message ---
+        loading_msg = (
+            "Optimizing geometry and rendering map layer..." 
+            if fast_render_enabled else 
+            "Processing high-resolution raw geometric boundaries... (May take longer)"
         )
+        
+        with st.spinner(loading_msg):
+            gdf = build_gdf(
+                region_choice,
+                level_key,
+                analysis_choice,
+                risk_slider,
+                fast_render_enabled,
+            )
+            
+            deck = make_deck(gdf)
+        
         st.caption(
             f"Showing {len(gdf):,} sectors in {region_choice} analyzing: {analysis_choice} ({oac_level_choice})"
         )
-
-        deck = make_deck(gdf)
         st.pydeck_chart(deck, height=700)
 
 
