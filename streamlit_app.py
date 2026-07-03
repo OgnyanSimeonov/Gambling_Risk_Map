@@ -54,7 +54,7 @@ with tab1:
     risk_cutoff_expr = 0.0 if percentile_tier == 10 else 1.0 + (10 - percentile_tier) * 0.08
     
     # Using relative path for static serving
-    tile_url = "/app/static/tiles/{z}/{x}/{y}.pbf"
+    tile_url = "static/tiles/{z}/{x}/{y}.pbf"
 
     gradient_fill_expression = f"""
         properties.{property_key} < {risk_cutoff_expr} ? [148, 163, 184, 25] : (
