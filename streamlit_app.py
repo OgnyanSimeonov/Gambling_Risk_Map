@@ -3,19 +3,20 @@ import tarfile
 import pydeck as pdk
 import streamlit as st
 
-# --- 1. Setup: Extract Tiles on Startup ---
-# This ensures the tiles are available at the path the MVTLayer expects
-TILE_ARCHIVE = "tiles_archive.tar.gz"
+# --- 1. Setup: Extract Tiles ---
+# Since your tar file contains the 'static/' folder, we extract to the root ('.')
 TILE_DIR = "static/tiles"
+TILE_ARCHIVE = "tiles_archive.tar.gz"
 
-if not os.path.exists(TILE_DIR):
+# Logic: If TILE_DIR is missing or empty, extract the archive
+if not os.path.exists(TILE_DIR) or (os.path.exists(TILE_DIR) and len(os.listdir(TILE_DIR)) == 0):
     if os.path.exists(TILE_ARCHIVE):
-        with st.spinner("Initializing map data... this only happens once."):
-            os.makedirs("static", exist_ok=True)
+        with st.spinner("Extracting map tiles..."):
             with tarfile.open(TILE_ARCHIVE, "r:gz") as tar:
-                tar.extractall(path="static")
+                tar.extractall(path=".")
+            st.success("Extraction complete!")
     else:
-        st.error(f"Error: {TILE_ARCHIVE} not found in the project root.")
+        st.error(f"Archive {TILE_ARCHIVE} not found in the root directory.")
 
 # --- 2. Streamlit Config ---
 os.makedirs(".streamlit", exist_ok=True)
@@ -47,16 +48,14 @@ with tab1:
         analysis_choice = st.radio(
             "Select Risk Profile map view layer style:", 
             options=["Combined Effect", "Tobacco", "Alcohol"], 
-            horizontal=True,
-            help="• Combined Effect: Average risk calculation.\n• Tobacco: Isolated Tobacco smoking odds ratio risks.\n• Alcohol: Isolated hazardous Alcohol consumption odds ratio risks."
+            horizontal=True
         )
         
     with ui_col2:
         granularity_choice = st.segmented_control(
             "Select OAC Classification Granularity Level:",
             options=["Subgroup", "Group"],
-            default="Subgroup",
-            help="• Subgroup: Deepest classification granularity.\n• Group: Broader classification level."
+            default="Subgroup"
         )
         
     with ui_col3:
@@ -65,18 +64,12 @@ with tab1:
             min_value=1,
             max_value=10,
             value=10,
-            step=1,
-            help="Slide down to isolate the highest vulnerability clusters."
+            step=1
         )
-        if percentile_tier == 10:
-            st.caption("✨ **Currently showing: All Areas**")
-        else:
-            st.caption(f"🎯 **Currently showing: Top {percentile_tier}0% Highest Risk Areas Only**")
 
-    # Resolve property keys
+    # Logic for properties
     property_key = "comb_OR"
     scale_key = "sub_95th"
-    
     if analysis_choice == "Tobacco":
         property_key = "tob_OR"
     elif analysis_choice == "Alcohol":
@@ -88,7 +81,7 @@ with tab1:
 
     risk_cutoff_expr = 0.0 if percentile_tier == 10 else 1.0 + (10 - percentile_tier) * 0.08
 
-    # Path for static serving in Streamlit
+    # The path /app/static/ works because enableStaticServing = true
     tile_url = "/app/static/tiles/{z}/{x}/{y}.pbf"
 
     gradient_fill_expression = f"""
@@ -104,9 +97,6 @@ with tab1:
     mvt_layer = pdk.Layer(
         "MVTLayer",
         data=tile_url,
-        shaded=False,
-        stroked=True,
-        filled=True,
         get_fill_color=gradient_fill_expression,
         get_line_color=[100, 116, 139, 30],
         line_width_min_pixels=0.15,
@@ -119,7 +109,7 @@ with tab1:
     deck = pdk.Deck(
         layers=[mvt_layer],
         initial_view_state=pdk.ViewState(longitude=-3.4360, latitude=55.3781, zoom=5.5, pitch=0),
-        tooltip={"html": "<b>OA Code:</b> {geo_code}<br/><b>Risk Score:</b> {comb_OR}", "style": {"backgroundColor": "#1e293b", "color": "white"}},
+        tooltip={"html": "<b>Risk Score:</b> {comb_OR}", "style": {"backgroundColor": "#1e293b", "color": "white"}},
         map_style="light",
     )
 
@@ -127,11 +117,7 @@ with tab1:
 
 with tab2:
     st.header("How to Use This Dashboard")
-    st.write("Navigate the map to explore local area vulnerability risk levels.")
 
 with tab3:
     st.header("Acknowledgments & Data Availability")
-    st.write("Supported by the EPSRC Centre for Doctoral Training in Mathematical Modelling, Analysis and Computation (MAC-MIGS).")
-
-st.write("---")
-st.markdown("<small>Citation: Simeonov et al., Harm Reduction Journal (2026).</small>", unsafe_allow_html=True)
+    st.write("Supported by the EPSRC Centre for Doctoral Training in MAC-MIGS.")
