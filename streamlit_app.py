@@ -80,7 +80,7 @@ with tab1:
     else:
         risk_cutoff_expr = 1.0 + (10 - percentile_tier) * 0.08
 
-    tile_url =  "/app/static/tiles/{z}/{x}/{y}.mvt"
+    tile_url =  "app/static/tiles/{z}/{x}/{y}.mvt"
 
     # FIXED: Reverted back to clean math expressions without function calls to satisfy the JSON parser
     gradient_fill_expression = f"""
