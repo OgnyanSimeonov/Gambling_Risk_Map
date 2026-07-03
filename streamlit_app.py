@@ -105,7 +105,7 @@ with tab1:
         pickable=True,
         auto_highlight=True,
         min_zoom=0,
-        max_zoom=11, 
+        max_zoom=12, 
     )
 
     view_state = pdk.ViewState(
