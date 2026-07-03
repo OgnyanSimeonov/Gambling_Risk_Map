@@ -4,27 +4,18 @@ import pydeck as pdk
 import streamlit as st
 
 # --- 1. Setup: Extract Tiles ---
-# We check if 'static/tiles/metadata.json' exists to ensure the folder is fully populated
 TILE_DIR = "static/tiles"
 TILE_ARCHIVE = "tiles_archive.tar.gz"
 
+# Extraction logic: Only runs if the directory is missing or empty
 if not os.path.exists("static/tiles/metadata.json"):
     if os.path.exists(TILE_ARCHIVE):
         with st.spinner("Extracting map tiles..."):
             with tarfile.open(TILE_ARCHIVE, "r:gz") as tar:
-                # We use path="." because your tar contains 'static/tiles/...'
                 tar.extractall(path=".")
             st.success("Extraction complete!")
     else:
-        st.error(f"Archive {TILE_ARCHIVE} not found in the root directory.")
-
-# --- DEBUGGING BLOCK ---
-st.write("--- DEBUG INFO ---")
-exists = os.path.exists("static/tiles")
-st.write(f"Does 'static/tiles' exist? {exists}")
-if exists:
-    file_count = sum([len(files) for r, d, files in os.walk("static/tiles")])
-    st.write(f"Total files found in static/tiles: {file_count}")
+        st.error(f"Archive {TILE_ARCHIVE} not found.")
 
 # --- 2. Streamlit Config ---
 os.makedirs(".streamlit", exist_ok=True)
@@ -33,6 +24,11 @@ with open(".streamlit/config.toml", "w") as f:
 
 st.set_page_config(page_title="OAC Odds Ratio Map", layout="wide")
 st.title("Gambling Local Area Risk Assessment")
+
+# --- DEBUG INFO ---
+if os.path.exists(TILE_DIR):
+    file_count = sum([len(files) for r, d, files in os.walk(TILE_DIR)])
+    st.sidebar.info(f"Tiles found: {file_count}")
 
 tab1, tab2, tab3 = st.tabs(["Interactive Map", "How to Use", "Acknowledgments"])
 
@@ -53,8 +49,8 @@ with tab1:
     scale_key = "sub_95th" if granularity_choice == "Subgroup" else "grp_95th"
     risk_cutoff_expr = 0.0 if percentile_tier == 10 else 1.0 + (10 - percentile_tier) * 0.08
     
-    # Using relative path for static serving
-    tile_url = "static/tiles/{z}/{x}/{y}.pbf"
+    # REQUIRED: Use /app/static/ for Streamlit Cloud static serving
+    tile_url = "/app/static/tiles/{z}/{x}/{y}.pbf"
 
     gradient_fill_expression = f"""
         properties.{property_key} < {risk_cutoff_expr} ? [148, 163, 184, 25] : (
